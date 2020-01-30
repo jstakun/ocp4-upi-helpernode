@@ -114,6 +114,7 @@
       url: "{{ ocp_bios}}"
       dest: /var/www/html/install/bios.raw.gz
       mode: 0555
+    tags: pxe  
 
   - name: Open up firewall ports
     firewalld:
@@ -171,14 +172,16 @@
     notify:
       - restart tftp
     when: not staticips
-
+    tags: pxe
+    
   - name: Create TFTP RHCOS dir
     file:
       path: /var/lib/tftpboot/rhcos
       state: directory
       mode: 0755
     when: not staticips
-
+    tags: pxe
+    
   - name: SEBool allow haproxy connect any port
     seboolean:
       name: haproxy_connect_any
@@ -190,13 +193,15 @@
   - name: Copy over files needed for TFTP
     shell: "cp -a /usr/share/syslinux/* /var/lib/tftpboot"
     when: not staticips
-
+    tags: pxe
+    
   - name: Downloading OCP4 installer initramfs
     get_url:
       url: "{{ ocp_initramfs }}"
       dest: /var/lib/tftpboot/rhcos/initramfs.img
       mode: 0555
     when: not staticips
+    tags: pxe
 
   - name: Downloading OCP4 installer kernel
     get_url:
@@ -204,6 +209,7 @@
       dest: /var/lib/tftpboot/rhcos/kernel
       mode: 0555
     when: not staticips
+    tags: pxe
 
   - name: Generate pxe config files
     block:
@@ -214,33 +220,37 @@
         mode: 0555
       notify:
         - restart tftp
+    tags: pxe    
 
-    - name: Set the bootstrap specific tftp file
-      template:
-        src: ../templates/pxe-bootstrap.j2
-        dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ bootstrap.macaddr | regex_replace (':', '-')}}"
-        mode: 0555
-      notify:
-        - restart tftp
+  - name: Set the bootstrap specific tftp file
+    template:
+      src: ../templates/pxe-bootstrap.j2
+      dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ bootstrap.macaddr | regex_replace (':', '-')}}"
+      mode: 0555
+    notify:
+      - restart tftp
+    tags: pxe  
 
-    - name: Set the master specific tftp files
-      template:
-        src: ../templates/pxe-master.j2
-        dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ item.macaddr | regex_replace (':', '-')}}"
-        mode: 0555
-      with_items: "{{ masters }}"
-      notify:
-        - restart tftp
+  - name: Set the master specific tftp files
+    template:
+      src: ../templates/pxe-master.j2
+      dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ item.macaddr | regex_replace (':', '-')}}"
+      mode: 0555
+    with_items: "{{ masters }}"
+    notify:
+      - restart tftp
+    tags: pxe  
 
-    - name: Set the worker specific tftp files
-      template:
-        src: ../templates/pxe-worker.j2
-        dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ item.macaddr | regex_replace (':', '-')}}"
-        mode: 0555
-      with_items: "{{ workers }}"
-      notify:
-        - restart tftp
+  - name: Set the worker specific tftp files
+    template:
+      src: ../templates/pxe-worker.j2
+      dest: "/var/lib/tftpboot/pxelinux.cfg/01-{{ item.macaddr | regex_replace (':', '-')}}"
+      mode: 0555
+    with_items: "{{ workers }}"
+    notify:
+      - restart tftp
     when: not staticips
+    tags: pxe
 
   - name: Installing TFTP Systemd helper
     copy:
@@ -248,6 +258,7 @@
       dest: /usr/local/bin/start-tftp.sh
       mode: '0555'
     when: not staticips
+    tags: pxe
 
   - name: Installing TFTP Systemd unit file
     copy:
@@ -255,6 +266,7 @@
       dest: /etc/systemd/system/helper-tftp.service
       mode: '0655'
     when: not staticips
+    tags: pxe
 
   - name: Systemd daemon reload
     systemd:
@@ -285,6 +297,7 @@
       - tftp
       - helper-tftp
     when: not staticips
+    tags: pxe
 
   - name: Unmasking Services
     systemd:
@@ -294,6 +307,7 @@
     with_items:
       - tftp
     when: not staticips
+    tags: pxe
 
   - name: Set the local resolv.conf file
     template:
@@ -377,16 +391,19 @@
     git:
       repo: https://github.com/ashcrow/filetranspiler
       dest: /usr/local/src/filetranspiler
+    tags: pxe  
 
   - name: Building filetranspiler
     shell: "podman build /usr/local/src/filetranspiler -t filetranspiler:latest"
-
+    tags: pxe
+    
   - name: Installing filetranspiler
     copy:
       src: ../files/filetranspiler
       dest: /usr/local/bin/filetranspiler
       mode: '0555'
-
+    tags: pxe
+    
   - name: Get network device system name
     shell: "nmcli -t dev show {{ helper.networkifacename }} | grep GENERAL.CONNECTION | cut -d: -f2"
     register: devicesystemname
